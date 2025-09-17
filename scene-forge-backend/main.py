@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import torch
 import cv2
 import numpy as np
@@ -13,6 +14,18 @@ app = FastAPI(
     title="SceneForge API",
     description="Backend for processing video into 3D scenes.",
     version="0.1.0"
+)
+
+#Configure CORS (Cross-Origin Resource Sharing)
+#We'll allow all origins for development. In production, only our specific frontend should be allowed.
+origins = ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Load a pre-trained depth estimation model from Hugging Face
