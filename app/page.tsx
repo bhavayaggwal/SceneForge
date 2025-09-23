@@ -30,7 +30,12 @@ const VideoUploadForm = () => {
     const formData = new FormData();
     formData.append('video_file', file);
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl =
+      typeof window !== "undefined" && (window as any).NEXT_PUBLIC_API_URL
+        ? (window as any).NEXT_PUBLIC_API_URL
+        : (typeof window !== "undefined" && window.location.origin
+            ? window.location.origin
+            : 'http://localhost:8000');
 
     try {
       const response = await fetch(`${apiUrl}/upload-video/`, {
