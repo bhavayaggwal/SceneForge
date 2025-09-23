@@ -4,17 +4,17 @@
 import { useState } from 'react';
 
 const VideoUploadForm = () => {
-  const [file, setFile] = useState(null);
+  const [file, setFile] = useState<File | null>(null);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleFileChange = (e) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       setFile(e.target.files[0]);
     }
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!file) {
       setMessage('Please select a video file.');
