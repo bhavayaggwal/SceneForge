@@ -1,81 +1,87 @@
-// app/page.tsx
 "use client";
 
-import { useState } from 'react';
+import React from 'react';
+import Link from 'next/link';
+import { motion } from 'framer-motion';
+import { Camera, Wand2, Download } from 'lucide-react';
+import Button from '@/components/ui/Button';
+import Card from '@/components/ui/Card';
 
-const VideoUploadForm = () => {
-  const [file, setFile] = useState<File | null>(null);
-  const [message, setMessage] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setFile(e.target.files[0]);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!file) {
-      setMessage('Please select a video file.');
-      return;
-    }
-
-    setLoading(true);
-    setMessage('Uploading and processing video...');
-
-    const formData = new FormData();
-    formData.append('video_file', file);
-
-    try {
-      const response = await fetch('http://localhost:8000/upload-video/', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await response.json();
-      if (response.ok) {
-        setMessage('Processing successful! Check the backend terminal for details.');
-        console.log(data);
-      } else {
-        setMessage(`Error: ${data.detail}`);
-      }
-    } catch (error) {
-      setMessage('Network error. Is the backend server running?');
-      console.error('Error:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+export default function Home() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-4">
-      <div className="w-full max-w-lg p-8 space-y-6 bg-gray-800 rounded-lg shadow-lg text-center">
-        <h1 className="text-3xl font-bold">SceneForge MVP</h1>
-        <p className="text-sm text-gray-400">Upload a short video to perform a depth map estimation.</p>
-        <form onSubmit={handleSubmit} className="flex flex-col items-center space-y-4">
-          <input
-            type="file"
-            accept="video/mp4,video/quicktime,video/avi"
-            onChange={handleFileChange}
-            disabled={loading}
-            className="w-full text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100"
-          />
-          <button
-            type="submit"
-            disabled={!file || loading}
-            className="w-full px-4 py-2 font-bold text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors"
-          >
-            {loading ? 'Processing...' : 'Upload Video'}
-          </button>
-        </form>
-        {message && <p className={`mt-4 text-center ${loading ? 'text-blue-400' : 'text-green-400'}`}>{message}</p>}
-        <p className="text-xs text-gray-500 mt-6">
-          Note: The actual 3D reconstruction is a complex next step. This demo shows that the video is successfully sent and processed by the ML model on the backend.
-        </p>
+    <div className="relative min-h-[calc(100vh-5rem)] flex flex-col items-center justify-center overflow-hidden">
+      {/* Decorative Orbs */}
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-neon-purple/20 rounded-full blur-[128px] animate-float pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-[30rem] h-[30rem] bg-cyber-cyan/10 rounded-full blur-[128px] animate-float pointer-events-none" style={{ animationDelay: '2s' }} />
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 py-20 text-center">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
+        >
+          <h1 className="text-6xl md:text-8xl font-black tracking-tighter mb-6 gradient-text py-2">
+            SceneForge
+          </h1>
+          <p className="text-xl md:text-2xl text-gray-400 mb-10 max-w-3xl mx-auto">
+            Turn phone videos into photorealistic 3D scenes using advanced neural rendering.
+          </p>
+          
+          <div className="flex justify-center gap-6">
+            <Link href="/upload">
+              <Button size="lg" className="px-8 shadow-xl">
+                Start Creating
+              </Button>
+            </Link>
+            <Link href="/viewer">
+              <Button variant="secondary" size="lg" className="px-8">
+                View Demo
+              </Button>
+            </Link>
+          </div>
+        </motion.div>
+
+        <motion.div 
+          initial={{ opacity: 0, y: 40 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.3 }}
+          className="mt-32 grid grid-cols-1 md:grid-cols-3 gap-8 text-left"
+        >
+          <Card glow gradientBorder>
+            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-cyber-cyan to-neon-purple flex items-center justify-center mb-6">
+              <Camera className="text-white" size={24} />
+            </div>
+            <h3 className="text-xl font-bold text-white mb-3">3D Reconstruction</h3>
+            <p className="text-gray-400 leading-relaxed">
+              Upload a simple video and watch our AI extract frames, estimate poses, and build a highly detailed 3D environment.
+            </p>
+          </Card>
+
+          <Card glow gradientBorder>
+            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-neon-purple to-hot-pink flex items-center justify-center mb-6">
+              <Wand2 className="text-white" size={24} />
+            </div>
+            <h3 className="text-xl font-bold text-white mb-3">Smart Editing</h3>
+            <p className="text-gray-400 leading-relaxed">
+              Clean up artifacts, crop your scene, and manipulate your 3D assets right in the browser with real-time feedback.
+            </p>
+          </Card>
+
+          <Card glow gradientBorder>
+            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-hot-pink to-cyber-cyan flex items-center justify-center mb-6">
+              <Download className="text-white" size={24} />
+            </div>
+            <h3 className="text-xl font-bold text-white mb-3">Export Anywhere</h3>
+            <p className="text-gray-400 leading-relaxed">
+              Download your optimized scenes in standard formats like GLTF or OBJ, ready to be dropped into any engine.
+            </p>
+          </Card>
+        </motion.div>
       </div>
+
+      <footer className="w-full text-center py-8 text-gray-500 text-sm mt-auto z-10">
+        &copy; {new Date().getFullYear()} SceneForge. All rights reserved.
+      </footer>
     </div>
   );
-};
-
-export default VideoUploadForm;
+}
