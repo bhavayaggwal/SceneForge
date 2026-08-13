@@ -6,7 +6,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-async def extract_frames(video_path: str, output_dir: str, settings, progress_callback: Callable[[float], None] = None) -> Tuple[int, dict]:
+def extract_frames(video_path: str, output_dir: str, settings, progress_callback: Callable[[float], None] = None) -> Tuple[int, dict]:
     """
     Extract frames using OpenCV.
     Sample every Nth frame based on settings.

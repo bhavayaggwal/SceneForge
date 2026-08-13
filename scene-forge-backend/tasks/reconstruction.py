@@ -25,10 +25,13 @@ async def run_reconstruction(job_id: str, video_path: str, settings):
         frames_dir = get_frames_dir(job_id, settings)
         
         def frame_progress(p: float):
-            # Fire and forget update
-            asyncio.create_task(_update_job_and_broadcast(job_id, progress=p))
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(_update_job_and_broadcast(job_id, progress=p))
+            except RuntimeError:
+                pass  # No event loop available, skip broadcast
             
-        num_frames, metadata = await extract_frames(video_path, frames_dir, settings, frame_progress)
+        num_frames, metadata = await asyncio.to_thread(extract_frames, video_path, frames_dir, settings, frame_progress)
         
         if num_frames == 0:
             raise ValueError("No frames extracted from video")
@@ -38,7 +41,11 @@ async def run_reconstruction(job_id: str, video_path: str, settings):
         colmap_dir = get_colmap_dir(job_id, settings)
         
         def colmap_progress(p: float):
-            asyncio.create_task(_update_job_and_broadcast(job_id, progress=p))
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(_update_job_and_broadcast(job_id, progress=p))
+            except RuntimeError:
+                pass  # No event loop available, skip broadcast
             
         await run_colmap(frames_dir, colmap_dir, settings, colmap_progress)
         
@@ -47,7 +54,11 @@ async def run_reconstruction(job_id: str, video_path: str, settings):
         splat_dir = get_splat_dir(job_id, settings)
         
         def gs_progress(p: float):
-            asyncio.create_task(_update_job_and_broadcast(job_id, progress=p))
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(_update_job_and_broadcast(job_id, progress=p))
+            except RuntimeError:
+                pass  # No event loop available, skip broadcast
             
         splat_path = await train_gaussians(colmap_dir, splat_dir, settings, gs_progress)
         

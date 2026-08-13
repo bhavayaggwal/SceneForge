@@ -92,7 +92,7 @@ async def run_colmap(frames_dir: str, output_dir: str, settings, progress_callba
             logger.error(f"COLMAP step {cmd[1]} failed: {error_details}")
             # For this MVP, if it fails because it's mock data or whatever, we just raise an error
             # In a real scenario we'd raise
-            # raise RuntimeError(f"COLMAP step {cmd[1]} failed.")
+            raise RuntimeError(f"COLMAP step {cmd[1]} failed: {error_details[:500]}")
             
     if progress_callback:
         progress_callback(100.0)

@@ -33,6 +33,8 @@ async def upload_video(
             if len(content) > settings.MAX_VIDEO_SIZE_MB * 1024 * 1024:
                 raise HTTPException(status_code=413, detail=f"File too large. Max size is {settings.MAX_VIDEO_SIZE_MB}MB.")
             await out_file.write(content)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save video: {str(e)}")
         

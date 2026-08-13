@@ -71,6 +71,7 @@ export default function UploadPage() {
       const fakeJobId = Math.random().toString(36).substring(7);
       router.push(`/processing?jobId=${fakeJobId}`);
     } catch (err) {
+      console.error(err);
       toast({ message: 'Upload failed. Please try again.', variant: 'error' });
       setIsUploading(false);
     }

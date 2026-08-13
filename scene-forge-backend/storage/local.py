@@ -42,7 +42,9 @@ def get_export_dir(job_id: str, settings) -> str:
 
 def cleanup_job_files(job_id: str, settings) -> None:
     try:
-        shutil.rmtree(Path(settings.UPLOAD_DIR) / f"{job_id}.mp4", ignore_errors=True)
+        upload_file = Path(settings.UPLOAD_DIR) / f"{job_id}.mp4"
+        if upload_file.is_file():
+            upload_file.unlink(missing_ok=True)
         shutil.rmtree(Path(settings.FRAMES_DIR) / job_id, ignore_errors=True)
         shutil.rmtree(Path(settings.COLMAP_DIR) / job_id, ignore_errors=True)
         # Keep splat and exports typically, but we can clean up if needed
