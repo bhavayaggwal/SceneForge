@@ -3,24 +3,27 @@ export enum ProcessingStage {
   SFM = 'SFM',
   TRAINING = 'TRAINING',
   RENDERING = 'RENDERING',
-  COMPLETE = 'COMPLETE'
+  COMPLETE = 'COMPLETE',
+  FAILED = 'FAILED'
 }
 
 export interface Job {
   id: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  status: ProcessingStage | string;
   progress: number;
-  currentStage: ProcessingStage;
-  sceneId?: string;
-  createdAt: string;
+  current_stage: string;
+  scene_id?: string;
+  created_at: string;
+  updated_at?: string;
+  error?: string;
 }
 
 export interface Scene {
   id: string;
   name: string;
-  splatUrl: string;
-  thumbnailUrl?: string;
-  createdAt: string;
+  splat_path: string;
+  point_count: number;
+  created_at: string;
 }
 
 export type ExportFormat = 'gltf' | 'obj';
@@ -38,6 +41,6 @@ export interface ApiError {
 }
 
 export interface UploadResponse {
-  jobId: string;
+  job_id: string;
   message: string;
 }

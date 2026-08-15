@@ -1,61 +1,114 @@
 'use client';
 
-import React, { Suspense, useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Film, Crosshair, Box, Eye, Loader2, CheckCircle } from 'lucide-react';
+import { Film, Crosshair, Box, Eye, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import ProgressBar from '@/components/ui/ProgressBar';
 import Button from '@/components/ui/Button';
+import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils';
+import { getJobStatus, createJobWebSocket } from '@/lib/api';
+import { ProcessingStage } from '@/types';
 
 const STAGES = [
-  { id: 'extracting', label: 'Extracting Frames', icon: Film, threshold: 25 },
-  { id: 'sfm', label: 'Estimating Camera Poses', icon: Crosshair, threshold: 50 },
-  { id: 'training', label: 'Training 3D Scene', icon: Box, threshold: 85 },
-  { id: 'rendering', label: 'Rendering Preview', icon: Eye, threshold: 100 },
+  { id: ProcessingStage.EXTRACTING, label: 'Extracting Frames', icon: Film },
+  { id: ProcessingStage.SFM, label: 'Estimating Camera Poses', icon: Crosshair },
+  { id: ProcessingStage.TRAINING, label: 'Training 3D Scene', icon: Box },
+  { id: ProcessingStage.RENDERING, label: 'Rendering Preview', icon: Eye },
 ];
 
 function ProcessingContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const jobId = searchParams.get('jobId') || 'unknown';
+  const { toast } = useToast();
+  const jobId = searchParams.get('jobId') || '';
   
   const [progress, setProgress] = useState(0);
+  const [stage, setStage] = useState<string>('');
+  const [sceneId, setSceneId] = useState<string>('');
+  const [status, setStatus] = useState<string>('pending');
+  const [errorMsg, setErrorMsg] = useState<string>('');
+  
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const statusRef = useRef<string>('pending');
 
   useEffect(() => {
-    // MVP: simulate progress over 20 seconds total
-    const totalTime = 20000;
-    const intervalTime = 100;
-    const increment = (100 / (totalTime / intervalTime));
+    if (!jobId) return;
 
-    const timer = setInterval(() => {
-      setProgress(p => {
-        if (p >= 100) {
-          clearInterval(timer);
-          return 100;
+    let ws: WebSocket | null = null;
+    let isActive = true;
+    
+    const startPolling = () => {
+      if (pollingRef.current) return;
+      pollingRef.current = setInterval(async () => {
+        try {
+          const job = await getJobStatus(jobId);
+          if (isActive) handleJobUpdate(job);
+          if (job.status === ProcessingStage.COMPLETE || job.status === ProcessingStage.FAILED) {
+            if (pollingRef.current) clearInterval(pollingRef.current);
+          }
+        } catch (err) {
+          console.error('Polling error', err);
         }
-        return Math.min(100, p + increment);
-      });
-    }, intervalTime);
+      }, 2000);
+    };
 
-    return () => clearInterval(timer);
-  }, []);
+    const handleJobUpdate = (job: import('@/types').Job) => {
+      setProgress(job.progress || 0);
+      setStage(job.status);
+      setStatus(job.status);
+      statusRef.current = job.status;
+      if (job.scene_id) setSceneId(job.scene_id);
+      if (job.error) setErrorMsg(job.error);
+      
+      if (job.status === ProcessingStage.FAILED) {
+        toast({ message: job.error || 'Processing failed', variant: 'error' });
+      }
+    };
 
-  const isComplete = progress >= 100;
+    try {
+      ws = createJobWebSocket(
+        jobId,
+        (data: import('@/types').Job) => {
+          if (isActive) handleJobUpdate(data);
+        },
+        () => {
+          if (isActive) startPolling();
+        },
+        () => {
+          if (isActive && statusRef.current !== ProcessingStage.COMPLETE && statusRef.current !== ProcessingStage.FAILED) {
+            startPolling();
+          }
+        }
+      );
+    } catch (_) {
+      startPolling();
+    }
+
+    return () => {
+      isActive = false;
+      if (ws) ws.close();
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [jobId, toast]);
+
+  const isComplete = status === ProcessingStage.COMPLETE;
+  const isFailed = status === ProcessingStage.FAILED;
   
-  const getStageStatus = (threshold: number, index: number) => {
-    const prevThreshold = index === 0 ? 0 : STAGES[index - 1].threshold;
-    if (progress >= threshold) return 'complete';
-    if (progress > prevThreshold) return 'active';
+  const getStageStatus = (stageId: string, index: number) => {
+    if (isComplete) return 'complete';
+    if (isFailed) return 'pending';
+    
+    const currentIndex = STAGES.findIndex(s => s.id === stage);
+    if (index < currentIndex) return 'complete';
+    if (index === currentIndex) return 'active';
     return 'pending';
   };
 
-  const estimatedSeconds = Math.max(0, Math.ceil((20000 - (progress / 100) * 20000) / 1000));
-
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Decorative background orb */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-cyber-cyan/20 rounded-full blur-[120px] pointer-events-none" />
       
       <Card glow className="w-full max-w-xl z-10 relative">
@@ -68,44 +121,44 @@ function ProcessingContent() {
           <ProgressBar progress={progress} />
           <div className="flex justify-between items-center mt-2 text-sm text-slate-400">
             <span>{Math.round(progress)}% Complete</span>
-            {!isComplete && <span>Est. remaining: {estimatedSeconds}s</span>}
+            {isFailed && <span className="text-red-400">Failed</span>}
           </div>
         </div>
 
         <div className="flex flex-col gap-4 mb-8">
-          {STAGES.map((stage, index) => {
-            const status = getStageStatus(stage.threshold, index);
-            const Icon = stage.icon;
+          {STAGES.map((stageItem, index) => {
+            const stageStatus = getStageStatus(stageItem.id, index);
+            const Icon = stageItem.icon;
             
             return (
               <motion.div
-                key={stage.id}
+                key={stageItem.id}
                 initial={false}
                 animate={{
-                  scale: status === 'active' ? 1.02 : 1,
-                  opacity: status === 'pending' ? 0.5 : 1
+                  scale: stageStatus === 'active' ? 1.02 : 1,
+                  opacity: stageStatus === 'pending' ? 0.5 : 1
                 }}
                 className={cn(
                   "flex items-center gap-4 p-4 rounded-xl border transition-all duration-300",
-                  status === 'active' ? "border-cyber-cyan bg-cyber-cyan/10 neon-glow" : "border-slate-800 bg-slate-900/50"
+                  stageStatus === 'active' ? "border-cyber-cyan bg-cyber-cyan/10 neon-glow" : "border-slate-800 bg-slate-900/50"
                 )}
               >
                 <div className={cn(
                   "p-2 rounded-lg",
-                  status === 'complete' ? "text-green-400 bg-green-400/10" :
-                  status === 'active' ? "text-cyber-cyan bg-cyber-cyan/20" :
+                  stageStatus === 'complete' ? "text-green-400 bg-green-400/10" :
+                  stageStatus === 'active' ? "text-cyber-cyan bg-cyber-cyan/20" :
                   "text-slate-500 bg-slate-800"
                 )}>
-                  {status === 'complete' ? <CheckCircle className="w-6 h-6" /> :
-                   status === 'active' ? <Loader2 className="w-6 h-6 animate-spin" /> :
+                  {stageStatus === 'complete' ? <CheckCircle className="w-6 h-6" /> :
+                   stageStatus === 'active' ? <Loader2 className="w-6 h-6 animate-spin" /> :
                    <Icon className="w-6 h-6" />}
                 </div>
                 
                 <span className={cn(
                   "font-medium flex-1",
-                  status === 'active' ? "text-white" : "text-slate-300"
+                  stageStatus === 'active' ? "text-white" : "text-slate-300"
                 )}>
-                  {stage.label}
+                  {stageItem.label}
                 </span>
               </motion.div>
             );
@@ -113,7 +166,7 @@ function ProcessingContent() {
         </div>
 
         <AnimatePresence>
-          {isComplete && (
+          {isComplete && sceneId && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -123,9 +176,30 @@ function ProcessingContent() {
                 variant="primary" 
                 size="lg" 
                 className="w-full"
-                onClick={() => router.push(`/viewer?sceneId=${jobId}`)}
+                onClick={() => router.push(`/viewer?sceneId=${sceneId}`)}
               >
                 View Scene
+              </Button>
+            </motion.div>
+          )}
+          
+          {isFailed && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex flex-col items-center gap-4"
+            >
+              <div className="flex items-center gap-2 text-red-400 bg-red-400/10 p-4 rounded-lg w-full border border-red-500/20">
+                <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                <span className="text-sm">{errorMsg || 'An error occurred during processing.'}</span>
+              </div>
+              <Button 
+                variant="secondary" 
+                size="lg" 
+                className="w-full"
+                onClick={() => router.push('/upload')}
+              >
+                Try Again
               </Button>
             </motion.div>
           )}

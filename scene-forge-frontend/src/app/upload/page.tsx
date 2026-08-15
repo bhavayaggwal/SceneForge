@@ -8,6 +8,7 @@ import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import ProgressBar from '@/components/ui/ProgressBar';
 import { useToast } from '@/components/ui/Toast';
+import { uploadVideo } from '@/lib/api';
 
 export default function UploadPage() {
   const router = useRouter();
@@ -51,28 +52,15 @@ export default function UploadPage() {
     setIsUploading(true);
     setUploadProgress(0);
 
-    // Simulate upload progress
-    const interval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 95) {
-          clearInterval(interval);
-          return 95;
-        }
-        return prev + 5;
-      });
-    }, 200);
-
     try {
-      // For now, simulate API call success and redirect
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      clearInterval(interval);
-      setUploadProgress(100);
+      const response = await uploadVideo(file, (progress) => {
+        setUploadProgress(progress);
+      });
       
-      const fakeJobId = Math.random().toString(36).substring(7);
-      router.push(`/processing?jobId=${fakeJobId}`);
-    } catch (err) {
-      console.error(err);
-      toast({ message: 'Upload failed. Please try again.', variant: 'error' });
+      router.push(`/processing?jobId=${response.job_id}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Upload failed. Please try again.';
+      toast({ message, variant: 'error' });
       setIsUploading(false);
     }
   };
