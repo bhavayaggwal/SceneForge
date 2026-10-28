@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Spike Viewer</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #111; color: #eee; font: 13px/1.4 system-ui, sans-serif; overflow: hidden; }
+    #hud { position: fixed; top: 8px; left: 8px; background: #000a; padding: 8px 10px; border-radius: 6px; white-space: pre; pointer-events: none; }
+    #bar { position: fixed; top: 8px; right: 8px; display: flex; gap: 6px; }
+    button { background: #333; color: #eee; border: 1px solid #555; border-radius: 4px; padding: 6px 10px; cursor: pointer; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/",
+        "@sparkjsdev/spark": "https://cdn.jsdelivr.net/npm/@sparkjsdev/spark@2.4.0/dist/spark.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="hud">loading…</div>
+  <div id="bar">
+    <button id="flip" title="Rotate 180° about X (3DGS PLYs are often upside down)">Flip (F)</button>
+    <button id="capture" title="Save a 1024px render + camera to spike/out/">Capture (C)</button>
+  </div>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark';
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.01, 1000);
+    camera.position.set(0, 0, 3);
+    const renderer = new THREE.WebGLRenderer({ antialias: false });
+    renderer.setPixelRatio(1);
+    renderer.setSize(innerWidth, innerHeight);
+    document.body.appendChild(renderer.domElement);
+    scene.add(new SparkRenderer({ renderer }));
+    const controls = new OrbitControls(camera, renderer.domElement);
+
+    const hud = document.getElementById('hud');
+    const stats = { fps: 0, loadMs: 0, splats: '?', hit: 'click the scene to raycast', rayMs: 0 };
+    const draw = () => (hud.textContent =
+      `fps        ${stats.fps}\nload       ${stats.loadMs} ms\nsplats     ${stats.splats}\nraycast    ${stats.rayMs.toFixed(1)} ms\n${stats.hit}`);
+
+    const sceneName = new URLSearchParams(location.search).get('scene') || 'room.ply';
+    const t0 = performance.now();
+    const splat = new SplatMesh({ url: `/scenes/${sceneName}` });
+    splat.quaternion.set(1, 0, 0, 0);
+    scene.add(splat);
+    await splat.initialized;
+    stats.loadMs = Math.round(performance.now() - t0);
+    stats.splats = splat.packedSplats?.numSplats ?? splat.numSplats ?? '?';
+    console.log('[spike] loaded', sceneName, stats);
+
+    // Click → raycast → marker
+    const marker = new THREE.Mesh(new THREE.SphereGeometry(0.02), new THREE.MeshBasicMaterial({ color: 0xff3366, depthTest: false }));
+    marker.renderOrder = 999;
+    marker.visible = false;
+    scene.add(marker);
+    const raycaster = new THREE.Raycaster();
+    let down = null;
+    renderer.domElement.addEventListener('pointerdown', (e) => (down = [e.clientX, e.clientY]));
+    renderer.domElement.addEventListener('pointerup', (e) => {
+      if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 4) return; // ignore drags
+      const ndc = new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+      raycaster.setFromCamera(ndc, camera);
+      const r0 = performance.now();
+      const hits = raycaster.intersectObject(splat, false);
+      stats.rayMs = performance.now() - r0;
+      if (hits.length) {
+        const p = hits[0].point;
+        marker.position.copy(p);
+        marker.visible = true;
+        stats.hit = `hit  (${p.x.toFixed(3)}, ${p.y.toFixed(3)}, ${p.z.toFixed(3)})  d=${hits[0].distance.toFixed(3)}`;
+      } else {
+        stats.hit = 'miss';
+      }
+      console.log('[spike] raycast', stats.hit, `${stats.rayMs.toFixed(1)} ms`);
+    });
+
+    // Capture: render once and grab the canvas in the same task, downscaled to 1024 on the long side.
+    async function capture() {
+      marker.visible = false;
+      renderer.render(scene, camera);
+      const src = renderer.domElement;
+      const s = 1024 / Math.max(src.width, src.height);
+      const c = Object.assign(document.createElement('canvas'), { width: Math.round(src.width * s), height: Math.round(src.height * s) });
+      c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
+      const cam = {
+        position: camera.position.toArray(), quaternion: camera.quaternion.toArray(), fov: camera.fov,
+        aspect: camera.aspect, width: c.width, height: c.height, target: controls.target.toArray(),
+      };
+      const r = await fetch('/capture', { method: 'POST', body: JSON.stringify({ png: c.toDataURL('image/png'), camera: cam }) });
+      const { name } = await r.json();
+      stats.hit = `captured → spike/out/${name}.png`;
+      console.log('[spike] capture', name);
+    }
+
+    const flip = () => splat.quaternion.premultiply(new THREE.Quaternion(1, 0, 0, 0));
+    document.getElementById('flip').onclick = flip;
+    document.getElementById('capture').onclick = capture;
+    addEventListener('keydown', (e) => { if (e.key === 'f') flip(); if (e.key === 'c') capture(); });
+    addEventListener('resize', () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+
+    let frames = 0, last = performance.now();
+    renderer.setAnimationLoop(() => {
+      controls.update();
+      renderer.render(scene, camera);
+      frames++;
+      const now = performance.now();
+      if (now - last >= 1000) { stats.fps = Math.round((frames * 1000) / (now - last)); frames = 0; last = now; draw(); }
+    });
+    window.__spike = { stats, camera, splat, capture };
+  </script>
+</body>
+</html>

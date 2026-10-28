@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SceneForge</title>
+  <meta name="description" content="Talk to a place: ask a local AI where things are in a 3D capture, how many, how big, and see the answer pinned in 3D." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 15V1.5' stroke='%23131416' stroke-width='1.6' stroke-linecap='round'/%3E%3Cpath d='M4.6 1.6 13 4.4 4.6 7.6Z' fill='%23d1246b'/%3E%3C/svg%3E" />
+</head>
+<body>
+  <div class="app" id="app">
+    <aside class="sidebar" id="sidebar" aria-label="Places">
+      <a class="brand" href="#/">
+        <svg class="mark" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 18.5V2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M5.8 2.2 16 5.6 5.8 9.4Z" fill="var(--accent)"/></svg>
+        <span>SceneForge</span>
+      </a>
+      <div class="group-label" id="places-label">Places</div>
+      <nav class="places" id="places"></nav>
+      <div class="add">
+        <button class="btn add-btn" id="add-btn" aria-haspopup="menu" aria-expanded="false">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>Add capture
+        </button>
+        <div class="menu" id="add-menu" role="menu" hidden>
+          <button role="menuitem" data-pick="splat"><strong>Splat file</strong><span>.ply, .spz, .splat</span></button>
+          <button role="menuitem" data-pick="video"><strong>Video of a room</strong><span>Reconstructed on this machine</span></button>
+        </div>
+        <input type="file" id="pick-splat" accept=".ply,.spz,.splat,.ksplat" hidden />
+        <input type="file" id="pick-video" accept="video/*,.mp4,.mov,.m4v,.webm,.mkv" hidden />
+      </div>
+      <div class="jobs" id="jobs" aria-live="polite"></div>
+      <div class="engine" id="engine"></div>
+    </aside>
+
+    <header class="topbar">
+      <button class="icon-btn menu-btn" id="menu-btn" aria-label="Open places" aria-controls="sidebar" aria-expanded="false">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg>
+      </button>
+      <div class="crumbs">
+        <a href="#/" class="crumb-parent">Places</a>
+        <span class="crumb-sep" aria-hidden="true">/</span>
+        <h1 id="title">SceneForge</h1>
+        <span class="pill" id="status-pill" hidden></span>
+      </div>
+      <div class="top-actions" id="top-actions">
+        <button class="btn" id="scale-btn" title="Click two points a known distance apart">Set scale</button>
+        <button class="btn primary" id="index-btn">Index scene</button>
+      </div>
+    </header>
+
+    <main class="sheet" id="sheet">
+      <section class="stage" id="stage" aria-label="3D view">
+        <div class="stage-empty" id="stage-empty" hidden></div>
+        <div class="loading" id="loading" hidden><div class="bar"><span></span></div><p></p></div>
+        <div class="scan-card" id="scan-card" hidden></div>
+        <div class="tools" role="toolbar" aria-label="View tools">
+          <div class="segmented" id="modes">
+            <button data-mode="orbit" aria-pressed="true" title="Orbit (O)">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M12.2 1.8v2.6H9.6"/></svg>Orbit</button>
+            <button data-mode="measure" aria-pressed="false" title="Measure (M)">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.8 10.6 10.6 1.8l3.6 3.6-8.8 8.8Z"/><path d="M5 7.4l1.4 1.4M7 5.4l1 1M9 3.4l1.4 1.4"/></svg>Measure</button>
+          </div>
+          <button class="icon-btn on-stage" id="home-btn" title="Back to start view (H)" aria-label="Back to start view">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 7.5 8 3l5.5 4.5M4 6.5v6.5h8V6.5"/></svg>
+          </button>
+        </div>
+        <div class="readout" id="readout" hidden></div>
+        <div class="drop" id="drop" hidden><p>Drop to add this capture</p></div>
+      </section>
+
+      <section class="panel" aria-label="Conversation and index">
+        <div class="tabs" role="tablist">
+          <button role="tab" id="tab-ask" aria-controls="pane-ask" aria-selected="true">Ask</button>
+          <button role="tab" id="tab-objects" aria-controls="pane-objects" aria-selected="false">Objects <span class="count" id="objects-count"></span></button>
+          <button role="tab" id="tab-pins" aria-controls="pane-pins" aria-selected="false">Pins <span class="count" id="pins-count"></span></button>
+        </div>
+        <div class="pane" id="pane-ask" role="tabpanel" aria-labelledby="tab-ask">
+          <ol class="thread" id="thread" aria-live="polite"></ol>
+          <form class="composer" id="composer">
+            <div class="suggest" id="suggest"></div>
+            <div class="ask-row">
+              <label class="visually-hidden" for="ask">Ask about this place</label>
+              <textarea id="ask" rows="1" placeholder="Ask about this place" autocomplete="off"></textarea>
+              <button class="btn primary send" id="send" type="submit" aria-label="Ask">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5"/></svg>
+              </button>
+            </div>
+          </form>
+        </div>
+        <div class="pane" id="pane-objects" role="tabpanel" aria-labelledby="tab-objects" hidden></div>
+        <div class="pane" id="pane-pins" role="tabpanel" aria-labelledby="tab-pins" hidden></div>
+      </section>
+    </main>
+  </div>
+  <div class="scrim" id="scrim" hidden></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
